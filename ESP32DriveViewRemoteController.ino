@@ -17,18 +17,15 @@
 #include <NetworkClient.h>
 #include <WiFiAP.h>
 
-// Set these to your desired credentials.
 const char *ssid = "fpv_remotecontroller";
 const char *password = "12345678";
 
-const char* serverIP = "192.168.4.2";  // IP des ESP32-Servers
-const uint16_t serverPort = 8080;         // Port des Servers
-WiFiClient _client;
-
-long _timeoutForReconnect = 30;
+int _serverPort = 8080;  
+WiFiServer _server;
 
 // ========================================================================================
 // Display GC9A01A
+// TIP: you must enable the Screen Buffer.
 
 // libraries for TFT Display
 #include "GC9A01_LTSM.hpp"
@@ -65,7 +62,7 @@ const uint16_t mColorOff = mTft.C_DCYAN;
 #define IMAGE_HEIGHT 240
 #define IMAGE_SIZE   (IMAGE_WIDTH * IMAGE_HEIGHT * 2)  // 115200 Bytes für RGB565
 uint8_t imageBuffer[IMAGE_SIZE];
-size_t receivedBytes = 0;
+size_t _receivedBytes = 0;
 
 // ========================================================================================
 // any
@@ -83,18 +80,21 @@ void setup() {
   Serial.println("FPV Remote Controller");
   Serial.println("Configuring access point...");
 
+  // ----------------------------------------------
   // setup access point
   if (!WiFi.softAP(ssid, password)) {
     log_e("Soft AP creation failed.");
     Serial.println("Soft AP creation failed.");
     while (1);
   }
+  WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
 
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
-
+  // ----------------------------------------------
+  // tft
   Serial.println("start TFT setup!");
   mTft.TFTsetupGPIO_SPI(mTFT_SCLK_FREQ, TFT_RST, TFT_DC, TFT_CS);
   mTft.TFTInitScreenSize(240, 240);
@@ -127,68 +127,65 @@ void setup() {
   mTft.writeBuffer();
   delay(1000);
 
-  //_client.setConnectionTimeout(3000);
-  connectToServer();
+    // ----------------------------------------------
+  // start server
+  _server.begin(_serverPort); 
+  _server.setTimeout(30000);
+  Serial.println("Server started!");
 
   mTft.setCursor(40, 90);
-  mTft.print("Client connected");
+  mTft.print("Server started! ");
   mTft.writeBuffer();
-  Serial.println("New Client.");  // print a message out the serial port
+  
   delay(2000);
 }
 
 void loop() {
 
-  if(_client.connected()){ 
-    Serial.println("connected");
-    digitalWrite(LED_BUILTIN, true);
+  digitalWrite(LED_BUILTIN, false);
+  Serial.println("------------------------------");
+  IPAddress myIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(myIP);
 
-    if (_client.available()) {     // if there's bytes to read from the client
+  Serial.println("wait for client connecting");
+  delay(200);
+  WiFiClient client = _server.accept();
 
-      Serial.println("read transfer");
-      // Lies die verfügbaren Bytes in den Puffer
-      size_t bytesToRead = min((size_t)_client.available(), IMAGE_SIZE - receivedBytes);
-      size_t bytesRead = _client.read(&imageBuffer[receivedBytes], bytesToRead);
-      receivedBytes += bytesRead;
+  if(client){
+    Serial.println("accept client");
 
-      // Wenn das gesamte Bild empfangen wurde
-      if (receivedBytes == IMAGE_SIZE) {
-        // Hier: Puffer an GC9A01_LTSM übergeben
-        mTft.drawBitmap16Data(0, 0, (uint8_t *)imageBuffer, 240, 240);
-        receivedBytes = 0;  // Zurücksetzen für nächstes Bild
-        mTft.writeBuffer();
+    if(client.connected()){ 
+      Serial.println("connected");
+      digitalWrite(LED_BUILTIN, true);
+      _receivedBytes = 0; 
+
+      while (client.available()) {     // if there's bytes to read from the client
+
+        Serial.println("read transfer");
+        // Lies die verfügbaren Bytes in den Puffer
+        size_t bytesToRead = min((size_t)client.available(), IMAGE_SIZE - _receivedBytes);
+        size_t bytesRead = client.read(&imageBuffer[_receivedBytes], bytesToRead);
+        _receivedBytes += bytesRead;
+
+        // Wenn das gesamte Bild empfangen wurde
+        if (_receivedBytes == IMAGE_SIZE) {
+          // Hier: Puffer an GC9A01_LTSM übergeben
+          mTft.drawBitmap16Data(0, 0, (uint8_t *)imageBuffer, 240, 240);
+          _receivedBytes = 0;  // Zurücksetzen für nächstes Bild
+          mTft.writeBuffer();
+        }
+        delay(1);
       }
+
+      digitalWrite(LED_BUILTIN, false);
     }
     else {
-      long actual = millis();
-      if(actual > _lastmillis + 5000) {
-        //Serial.println("reconnect");
-        //_client.stop();
-        //connectToServer();
-      }
+      Serial.println("connection break");
+      delay(3000);
     }
-
-    digitalWrite(LED_BUILTIN, false);
-  }
-  else {
-    Serial.println("connection break");
-    delay(3000);
   }
 
   delay(10);
 }
 
-void connectToServer() {
-  while(!_client.connect(serverIP, serverPort)){
-
-    mTft.setCursor(40, 90);
-    mTft.print("No connection");
-    mTft.setCursor(40, 110);
-    mTft.print("with a client!");
-    mTft.writeBuffer();
-
-    Serial.println("No connection with a client!");
-    //_client.stop();
-    delay(1000);
-  }
-}
