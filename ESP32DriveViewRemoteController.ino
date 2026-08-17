@@ -25,15 +25,27 @@ const char* serverIP = "192.168.4.2";  // IP des ESP32-Servers
 const uint16_t serverPort = 8080;         // Port des Servers
 WiFiClient _client;
 
+long _timeoutForReconnect = 30;
+
 // ========================================================================================
+// Display GC9A01A
+
 // libraries for TFT Display
 #include "GC9A01_LTSM.hpp"
 #include "fonts_LTSM/FontArialBold_LTSM.hpp" // 16x16 pixels
 //#include "fonts_LTSM/FontPico_LTSM.hpp" // 8x12 pixels
 //#include "fonts_LTSM/FontSinclairS_LTSM.hpp" // 8x8 pixels
 
-// ========================================================================================
-// Display GC9A01A
+// Pin Connections with XIAO ESP32-S3
+// ESP32              |  TFT Display
+// -------------------------------- 
+// GND                | GND
+// 3,3V               | VCC
+// D10 (GPIO9, MOSI)  | SDA
+// D8  (GPIO7, SCK)   | SCL
+// D0  (GPIO1)        | CS
+// D1  (GPIO2)        | DC
+// D2  (GPIO3)        | RST
 
 // Pin Mapping XIAO ESP32-S3
 #define TFT_CS     D0 // Cable Select
@@ -43,20 +55,22 @@ WiFiClient _client;
 uint32_t mTFT_SCLK_FREQ = 8000000;  // Spi freq in Hertz
 GC9A01_LTSM mTft;
 
+// Base Colers
 const uint16_t mColorText = mTft.C_CYAN;
 const uint16_t mColorOn = mTft.C_CYAN;
 const uint16_t mColorOff = mTft.C_DCYAN;
 
+// Screen buffer for receiving
 #define IMAGE_WIDTH  240
 #define IMAGE_HEIGHT 240
 #define IMAGE_SIZE   (IMAGE_WIDTH * IMAGE_HEIGHT * 2)  // 115200 Bytes für RGB565
-
 uint8_t imageBuffer[IMAGE_SIZE];
 size_t receivedBytes = 0;
 
-long _timeoutForReconnect = 30;
-long _lastmillis = 0;
+// ========================================================================================
+// any
 
+long _lastmillis = 0;
 
 void setup() {
   
