@@ -20,10 +20,6 @@
 // D1  (GPIO2)        | DC
 // D2  (GPIO3)        | RST
 
-// XIAO ESP32-S3
-// Display TFT GC9A01
-// Remote Control
-
 #include <Arduino.h>
 
 // ========================================================================================
@@ -36,22 +32,20 @@
 const char *ssid = "fpv_remotecontroller";
 const char *password = "12345678";
 
-const char* serverIP = "192.168.4.2";  // IP des ESP32-Servers
-const uint16_t serverPort = 8080;         // Port des Servers
+// ==================================================
+// Client
+const char* serverIP = "192.168.4.2";     // IP of ESP32-Server
+const uint16_t serverPort = 5001;         // Port of Servers
 WiFiClient _client;
 
 // ========================================================================================
+// Display GC9A01A
+
 // libraries for TFT Display
 #include "GC9A01_LTSM.hpp"
 #include "fonts_LTSM/FontArialBold_LTSM.hpp" // 16x16 pixels
-//#include "fonts_LTSM/FontPico_LTSM.hpp" // 8x12 pixels
-//#include "fonts_LTSM/FontSinclairS_LTSM.hpp" // 8x8 pixels
 
-// ========================================================================================
-// Display GC9A01A
-// #ifdef dislib16_ADVANCED_SCREEN_BUFFER_ENABLE
-//   #pragma message("gll: dislib16_ADVANCED_SCREEN_BUFFER_ENABLE is defined. This example is not for that mode")
-// #endif
+
 
 // Pin Mapping XIAO ESP32-S3
 #define TFT_CS     D0 // Cable Select
@@ -131,7 +125,6 @@ void setup() {
   mTft.writeBuffer();
   delay(1000);
 
-  //_client.setConnectionTimeout(3000);
   connectToServer();
 
   mTft.setCursor(40, 90);
@@ -163,14 +156,6 @@ void loop() {
         mTft.writeBuffer();
       }
     }
-    else {
-      long actual = millis();
-      if(actual > _lastmillis + 5000) {
-        //Serial.println("reconnect");
-        //_client.stop();
-        //connectToServer();
-      }
-    }
 
     digitalWrite(LED_BUILTIN, false);
   }
@@ -192,7 +177,6 @@ void connectToServer() {
     mTft.writeBuffer();
 
     Serial.println("No connection with a client!");
-    //_client.stop();
     delay(1000);
   }
 }
