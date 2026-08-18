@@ -157,7 +157,7 @@ void setup() {
 void loop() {
 
   if(_client.connected()){ 
-    Serial.println("connected");
+    //Serial.println("connected");
     digitalWrite(LED_BUILTIN, true);
 
     if (_client.available() >= sizeof(uint32_t)) {     // if there's bytes to read from the client
@@ -170,7 +170,8 @@ void loop() {
                   (sizeBytes[2] << 8)  |
                   sizeBytes[3];  // Big-Endian zu uint32_t umwandeln
 
-      Serial.println("read transfer");
+      //Serial.println("read transfer");
+
       // Lies die verfügbaren Bytes in den Puffer
       // size_t bytesToRead = min((size_t)_client.available(), IMAGE_SIZE - receivedBytes);
       // size_t bytesRead = _client.read(&imageBuffer[receivedBytes], bytesToRead);
@@ -201,15 +202,15 @@ void loop() {
     delay(1);
   }
 
-  char buffer[12];
-      sprintf(buffer, "%d", jpgSize);
-      Serial.print("jpg size "); Serial.println(buffer);
-  sprintf(buffer, "%d", received);
-      Serial.print("received "); Serial.println(buffer);
+  // char buffer[12];
+  //     sprintf(buffer, "%d", jpgSize);
+  //     Serial.print("jpg size "); Serial.println(buffer);
+  // sprintf(buffer, "%d", received);
+  //     Serial.print("received "); Serial.println(buffer);
 
       TJpgDec.drawJpg(0, 0, jpgBuffer, jpgSize);
 free(jpgBuffer);
-    Serial.println("Has write to draw jpg. Wait for Callback");
+    //Serial.println("Has write to draw jpg. Wait for Callback");
     mTft.writeBuffer();
 
     updateFPS();
