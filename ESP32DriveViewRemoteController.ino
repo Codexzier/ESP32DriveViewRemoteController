@@ -130,8 +130,12 @@ void setup() {
     // ----------------------------------------------
   // start server
   _server.begin(_serverPort); 
-  _server.setTimeout(30000);
+  _server.setNoDelay(true);  // Deaktiviert Nagle's Algorithmus (schnelleres Senden)
+  //_server.setTimeout(30000);
   Serial.println("Server started!");
+  char buffer[12];
+  sprintf(buffer, "%d", _serverPort);
+  Serial.print("Port: "); Serial.println(buffer);
 
   mTft.setCursor(40, 90);
   mTft.print("Server started! ");
@@ -148,12 +152,16 @@ void loop() {
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
+  char buffer[12];
+  sprintf(buffer, "%d", _serverPort);
+  Serial.print("Server Port: "); Serial.println(buffer);
+
   Serial.println("wait for client connecting");
   delay(200);
   WiFiClient client = _server.accept();
 
   if(client){
-    Serial.println("accept client");
+    Serial.println("connected client");
 
     if(client.connected()){ 
       Serial.println("connected");
@@ -175,15 +183,24 @@ void loop() {
           _receivedBytes = 0;  // Zurücksetzen für nächstes Bild
           mTft.writeBuffer();
         }
+        sprintf(buffer, "%d", _receivedBytes);
+        Serial.print("Received bytes: "); Serial.println(_receivedBytes, DEC);
+        client.write("ACK");
         delay(1);
       }
 
       digitalWrite(LED_BUILTIN, false);
+      Serial.println("Disconnected");
+      client.stop();
     }
     else {
       Serial.println("connection break");
       delay(3000);
     }
+  }
+  else {
+    Serial.println("Client is not set!");
+    delay(1000);
   }
 
   delay(10);
