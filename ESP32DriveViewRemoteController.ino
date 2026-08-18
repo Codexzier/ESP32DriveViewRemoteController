@@ -9,31 +9,7 @@
 // Stand:         17.08.2026
 // ========================================================================================
 
-#include <Arduino.h>
-
-// ========================================================================================
-// Access Point and network server
-#include <WiFi.h>
-#include <NetworkClient.h>
-#include <WiFiAP.h>
-
-const char *ssid = "fpv_remotecontroller";
-const char *password = "12345678";
-
-int _serverPort = 8080;  
-WiFiServer _server;
-
-// ========================================================================================
-// Display GC9A01A
-// TIP: you must enable the Screen Buffer.
-
-// libraries for TFT Display
-#include "GC9A01_LTSM.hpp"
-#include "fonts_LTSM/FontArialBold_LTSM.hpp" // 16x16 pixels
-//#include "fonts_LTSM/FontPico_LTSM.hpp" // 8x12 pixels
-//#include "fonts_LTSM/FontSinclairS_LTSM.hpp" // 8x8 pixels
-
-// Pin Connections with XIAO ESP32-S3
+// Pin Connections with XIAO ESP32-S3 with GC9A01 TFT Display
 // ESP32              |  TFT Display
 // -------------------------------- 
 // GND                | GND
@@ -44,6 +20,39 @@ WiFiServer _server;
 // D1  (GPIO2)        | DC
 // D2  (GPIO3)        | RST
 
+// XIAO ESP32-S3
+// Display TFT GC9A01
+// Remote Control
+
+#include <Arduino.h>
+
+// ========================================================================================
+// Access Point and network server
+#include <WiFi.h>
+#include <NetworkClient.h>
+#include <WiFiAP.h>
+
+// Set these to your desired credentials.
+const char *ssid = "fpv_remotecontroller";
+const char *password = "12345678";
+
+const char* serverIP = "192.168.4.2";  // IP des ESP32-Servers
+const uint16_t serverPort = 8080;         // Port des Servers
+WiFiClient _client;
+
+// ========================================================================================
+// libraries for TFT Display
+#include "GC9A01_LTSM.hpp"
+#include "fonts_LTSM/FontArialBold_LTSM.hpp" // 16x16 pixels
+//#include "fonts_LTSM/FontPico_LTSM.hpp" // 8x12 pixels
+//#include "fonts_LTSM/FontSinclairS_LTSM.hpp" // 8x8 pixels
+
+// ========================================================================================
+// Display GC9A01A
+// #ifdef dislib16_ADVANCED_SCREEN_BUFFER_ENABLE
+//   #pragma message("gll: dislib16_ADVANCED_SCREEN_BUFFER_ENABLE is defined. This example is not for that mode")
+// #endif
+
 // Pin Mapping XIAO ESP32-S3
 #define TFT_CS     D0 // Cable Select
 #define TFT_DC     D1 // 
@@ -52,22 +61,20 @@ WiFiServer _server;
 uint32_t mTFT_SCLK_FREQ = 8000000;  // Spi freq in Hertz
 GC9A01_LTSM mTft;
 
-// Base Colers
 const uint16_t mColorText = mTft.C_CYAN;
 const uint16_t mColorOn = mTft.C_CYAN;
 const uint16_t mColorOff = mTft.C_DCYAN;
 
-// Screen buffer for receiving
 #define IMAGE_WIDTH  240
 #define IMAGE_HEIGHT 240
 #define IMAGE_SIZE   (IMAGE_WIDTH * IMAGE_HEIGHT * 2)  // 115200 Bytes für RGB565
+
 uint8_t imageBuffer[IMAGE_SIZE];
-size_t _receivedBytes = 0;
+size_t receivedBytes = 0;
 
-// ========================================================================================
-// any
-
+long _timeoutForReconnect = 30;
 long _lastmillis = 0;
+
 
 void setup() {
   
@@ -80,21 +87,18 @@ void setup() {
   Serial.println("FPV Remote Controller");
   Serial.println("Configuring access point...");
 
-  // ----------------------------------------------
   // setup access point
   if (!WiFi.softAP(ssid, password)) {
     log_e("Soft AP creation failed.");
     Serial.println("Soft AP creation failed.");
     while (1);
   }
-  WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
 
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
-  // ----------------------------------------------
-  // tft
+
   Serial.println("start TFT setup!");
   mTft.TFTsetupGPIO_SPI(mTFT_SCLK_FREQ, TFT_RST, TFT_DC, TFT_CS);
   mTft.TFTInitScreenSize(240, 240);
@@ -127,82 +131,68 @@ void setup() {
   mTft.writeBuffer();
   delay(1000);
 
-    // ----------------------------------------------
-  // start server
-  _server.begin(_serverPort); 
-  _server.setNoDelay(true);  // Deaktiviert Nagle's Algorithmus (schnelleres Senden)
-  //_server.setTimeout(30000);
-  Serial.println("Server started!");
-  char buffer[12];
-  sprintf(buffer, "%d", _serverPort);
-  Serial.print("Port: "); Serial.println(buffer);
+  //_client.setConnectionTimeout(3000);
+  connectToServer();
 
   mTft.setCursor(40, 90);
-  mTft.print("Server started! ");
+  mTft.print("Client connected");
   mTft.writeBuffer();
-  
+  Serial.println("New Client.");  // print a message out the serial port
   delay(2000);
 }
 
 void loop() {
 
-  digitalWrite(LED_BUILTIN, false);
-  Serial.println("------------------------------");
-  IPAddress myIP = WiFi.softAPIP();
-  Serial.print("AP IP address: ");
-  Serial.println(myIP);
+  if(_client.connected()){ 
+    Serial.println("connected");
+    digitalWrite(LED_BUILTIN, true);
 
-  char buffer[12];
-  sprintf(buffer, "%d", _serverPort);
-  Serial.print("Server Port: "); Serial.println(buffer);
+    if (_client.available()) {     // if there's bytes to read from the client
 
-  Serial.println("wait for client connecting");
-  delay(200);
-  WiFiClient client = _server.accept();
+      Serial.println("read transfer");
+      // Lies die verfügbaren Bytes in den Puffer
+      size_t bytesToRead = min((size_t)_client.available(), IMAGE_SIZE - receivedBytes);
+      size_t bytesRead = _client.read(&imageBuffer[receivedBytes], bytesToRead);
+      receivedBytes += bytesRead;
 
-  if(client){
-    Serial.println("connected client");
-
-    if(client.connected()){ 
-      Serial.println("connected");
-      digitalWrite(LED_BUILTIN, true);
-      _receivedBytes = 0; 
-
-      while (client.available()) {     // if there's bytes to read from the client
-
-        Serial.println("read transfer");
-        // Lies die verfügbaren Bytes in den Puffer
-        size_t bytesToRead = min((size_t)client.available(), IMAGE_SIZE - _receivedBytes);
-        size_t bytesRead = client.read(&imageBuffer[_receivedBytes], bytesToRead);
-        _receivedBytes += bytesRead;
-
-        // Wenn das gesamte Bild empfangen wurde
-        if (_receivedBytes == IMAGE_SIZE) {
-          // Hier: Puffer an GC9A01_LTSM übergeben
-          mTft.drawBitmap16Data(0, 0, (uint8_t *)imageBuffer, 240, 240);
-          _receivedBytes = 0;  // Zurücksetzen für nächstes Bild
-          mTft.writeBuffer();
-        }
-        sprintf(buffer, "%d", _receivedBytes);
-        Serial.print("Received bytes: "); Serial.println(_receivedBytes, DEC);
-        client.write("ACK");
-        delay(1);
+      // Wenn das gesamte Bild empfangen wurde
+      if (receivedBytes == IMAGE_SIZE) {
+        // Hier: Puffer an GC9A01_LTSM übergeben
+        mTft.drawBitmap16Data(0, 0, (uint8_t *)imageBuffer, 240, 240);
+        receivedBytes = 0;  // Zurücksetzen für nächstes Bild
+        mTft.writeBuffer();
       }
-
-      digitalWrite(LED_BUILTIN, false);
-      Serial.println("Disconnected");
-      client.stop();
     }
     else {
-      Serial.println("connection break");
-      delay(3000);
+      long actual = millis();
+      if(actual > _lastmillis + 5000) {
+        //Serial.println("reconnect");
+        //_client.stop();
+        //connectToServer();
+      }
     }
+
+    digitalWrite(LED_BUILTIN, false);
   }
   else {
-    Serial.println("Client is not set!");
-    delay(1000);
+    Serial.println("connection break");
+    delay(3000);
   }
 
   delay(10);
 }
 
+void connectToServer() {
+  while(!_client.connect(serverIP, serverPort)){
+
+    mTft.setCursor(40, 90);
+    mTft.print("No connection");
+    mTft.setCursor(40, 110);
+    mTft.print("with a client!");
+    mTft.writeBuffer();
+
+    Serial.println("No connection with a client!");
+    //_client.stop();
+    delay(1000);
+  }
+}
