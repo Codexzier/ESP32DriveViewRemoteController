@@ -196,8 +196,7 @@ void loop() {
 
   while (received < jpgSize) {
     if (_client.available()) {
-      received += _client.read(jpgBuffer + received, jpgSize - received);
-      
+      received += _client.read(jpgBuffer + received, jpgSize - received); 
     }
     delay(1);
   }
@@ -208,10 +207,10 @@ void loop() {
   // sprintf(buffer, "%d", received);
   //     Serial.print("received "); Serial.println(buffer);
 
-      TJpgDec.drawJpg(0, 0, jpgBuffer, jpgSize);
-free(jpgBuffer);
+  TJpgDec.drawJpg(0, 0, jpgBuffer, jpgSize);
+  free(jpgBuffer);
     //Serial.println("Has write to draw jpg. Wait for Callback");
-    mTft.writeBuffer();
+  mTft.writeBuffer();
 
     updateFPS();
 
@@ -232,7 +231,7 @@ free(jpgBuffer);
     delay(3000);
   }
 
-  delay(10);
+  //delay(10);
 }
 
 void connectToServer() {
